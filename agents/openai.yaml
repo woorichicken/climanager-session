@@ -1,0 +1,4 @@
+interface:
+  display_name: "CLI Manager Sessions"
+  short_description: "Open visible terminal sessions in CLI Manager and drive coding agents in them"
+  default_prompt: "Use $climanager-session to open and drive a terminal session inside CLI Manager"
