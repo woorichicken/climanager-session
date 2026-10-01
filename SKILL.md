@@ -158,6 +158,14 @@ Tools: `list_workspaces`, `list_templates`, `list_sessions`, `open_session`, `se
 `wait_for_idle`, `read_output`, `focus_session`, `release_session`, `close_session`. This skill uses
 the REST path so it works without MCP configuration; the rules above apply to both.
 
+## Build your own process on top of this
+
+This skill only **drives** sessions. What to do, when to stop and ask, and what to show at the end
+depend on the person using it — so put that in **your own skill** that calls this one, not here.
+Start from [`references/process-template.md`](references/process-template.md): pick the cases you
+actually repeat (batch across projects, items from your queue, audits…), and for each one write down
+what you confirm once up front, where it must stop, and the one-page summary it ends with.
+
 ## When not to use this
 
 - The user asked **you** to do it in this conversation — don't open another terminal for it.

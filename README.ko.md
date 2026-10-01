@@ -36,6 +36,14 @@ npx skills add woorichicken/climanager-session@climanager-session
    node "$CLI" release last
    ```
 
+## 내 프로세스로 만들어 쓰기
+
+이 스킬은 **엔진**입니다 — 열고, 입력하고, 기다리고, 읽습니다. 어떤 프로젝트를 돌릴지, 에이전트가
+어디까지 혼자 배포해도 되는지, 어디서 멈추고 물어야 하는지, 아침에 무엇을 보고 싶은지 같은
+**프로세스**는 사람마다 다릅니다. 그건 이 스킬을 부르는 **자기만의 스킬**로 만드세요.
+[`references/process-template.md`](references/process-template.md)에서 시작하면 됩니다.
+이미 두세 번 반복한 일부터 케이스로 옮기세요 — 한 번도 안 돌려 본 프로세스는 추측입니다.
+
 ## 종료 코드
 
 | 코드 | 뜻 | 다음 |

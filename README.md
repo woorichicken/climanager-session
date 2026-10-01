@@ -70,6 +70,14 @@ node "$CLI" release last                     # hand it to you; the session keeps
 
 A green session with a bot icon appears in the sidebar. Type into it whenever you like.
 
+## Make it yours
+
+This skill is the **engine**: open, type, wait, read. The **process** — which projects, what an agent
+may ship on its own, where it must stop and ask you, what you want to see in the morning — is personal.
+Write it as your own skill that calls `climanager-session`, starting from
+[`references/process-template.md`](references/process-template.md). Begin with the work you have
+already repeated two or three times; a process you have never run is a guess.
+
 ## Exit codes
 
 Scripts and agents branch on these, not on the wording.
