@@ -76,8 +76,13 @@ per user — pick one from `templates`, or pass `--command "claude"` instead.
    for work in that folder. When unsure, report the screen and ask.
    - `clim open` answers **Claude Code's folder-trust question with Yes** by itself and then sends the
      first prompt — you open a session to work in that folder. That question starts with the cursor on
-     **"No, exit"**, so a bare Enter quits the agent. It is the only question clim answers on its own;
-     anything else (permission prompts, warnings) still stops with exit 3. `--no-trust` turns it off.
+     **"No, exit"**, so a bare Enter quits the agent.
+   - It handles **Codex** too (codex-cli 0.155.1): when a newer release exists Codex asks to update on
+     every start with the cursor on **"1. Update now"** (runs `brew upgrade`) — clim picks `2` (Skip).
+     A new folder then gets Codex's trust question with `› 1. Yes, continue` highlighted — clim presses
+     Enter (`1` alone does not close it).
+   - Those three are the only questions clim answers on its own; anything else (permission prompts,
+     warnings) still stops with exit 3. `--no-trust` turns it off.
 3. **Do not use `--force`** except to answer a free-text question ("What should I do differently?").
 4. **Exit 4 means stop.** The user clicked *Disconnect AI*. From app 1.11 another call would technically
    reconnect, so this rule is what keeps you out — continue only when the user asks.

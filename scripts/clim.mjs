@@ -251,34 +251,69 @@ const TRUST_SETTLE_MS = 15_000
  * The options have no numbers, so it presses arrows for the distance between the cursor and "Yes".
  * True only once the question is gone.
  */
-async function answerFolderTrust(id) {
-    const screen = await api('GET', `/v1/sessions/${id}/output?lines=60`)
-    const lines = screen.lines
-    const yes = lines.findIndex((line) => TRUST_YES.test(line))
-    if (yes < 0) return false
-    // The highlighted option is the pointer row nearest to "Yes" — an earlier "❯ prompt" line can be above it.
+/** Codex asks to update whenever a newer release exists, with "1. Update now" (brew upgrade) highlighted. */
+const CODEX_UPDATE = /Update available!/
+const CODEX_UPDATE_SKIP = /^\s*(?:[❯›>]\s*)?2\.\s*Skip\s*$/
+const CODEX_TRUST = /Do you trust the contents of this directory/
+const CODEX_TRUST_YES = /\bYes, continue\b/
+const STARTUP_ROUNDS = 3
+
+/** Arrow keys from the highlighted option nearest `target` to it, then Enter; null when none is near. */
+function moveTo(lines, target) {
     let cursor = -1
     for (let distance = 0; distance <= 3 && cursor < 0; distance++) {
-        for (const row of [yes - distance, yes + distance]) {
+        for (const row of [target - distance, target + distance]) {
             if (row >= 0 && row < lines.length && TRUST_CURSOR.test(lines[row])) {
                 cursor = row
                 break
             }
         }
     }
-    if (cursor < 0) return false
+    if (cursor < 0) return null
+    const distance = target - cursor
+    return [...Array(Math.abs(distance)).fill(distance > 0 ? 'down' : 'up'), 'enter']
+}
 
-    const distance = yes - cursor
-    const keys = [...Array(Math.abs(distance)).fill(distance > 0 ? 'down' : 'up'), 'enter']
-    await api('POST', `/v1/sessions/${id}/input`, { keys })
-
-    const deadline = Date.now() + TRUST_SETTLE_MS
-    while (Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        const after = await api('GET', `/v1/sessions/${id}/output?lines=60`)
-        if (!after.lines.some((line) => TRUST_YES.test(line))) return true
+/** Keys for the start-up question on screen, or null when it is not one clim answers. */
+function startupAnswer(lines) {
+    const claudeYes = lines.findIndex((line) => TRUST_YES.test(line))
+    if (claudeYes >= 0) return moveTo(lines, claudeYes)
+    // Skipping installs nothing and only defers the offer; "2" picks it and closes the question.
+    if (lines.some((line) => CODEX_UPDATE.test(line)) && lines.some((line) => CODEX_UPDATE_SKIP.test(line))) return ['2']
+    if (lines.some((line) => CODEX_TRUST.test(line))) {
+        const yes = lines.findIndex((line) => CODEX_TRUST_YES.test(line))
+        if (yes >= 0) return moveTo(lines, yes)
     }
-    return false
+    return null
+}
+
+/**
+ * Answers the questions an agent asks before its first prompt in a new folder: Claude Code's
+ * folder trust (cursor on "No, exit"), Codex's update offer (cursor on "Update now") and Codex's
+ * folder trust. True when at least one was answered and none is left on screen.
+ */
+async function answerFolderTrust(id) {
+    let answered = 0
+    for (let round = 0; round < STARTUP_ROUNDS; round++) {
+        const screen = await api('GET', `/v1/sessions/${id}/output?lines=60`)
+        const keys = startupAnswer(screen.lines)
+        if (!keys) break
+        await api('POST', `/v1/sessions/${id}/input`, { keys })
+        answered++
+        // Wait for the question to go; Codex may put the next one up right after.
+        const deadline = Date.now() + TRUST_SETTLE_MS
+        let after = screen.lines
+        while (Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 500))
+            after = (await api('GET', `/v1/sessions/${id}/output?lines=60`)).lines
+            const next = startupAnswer(after)
+            if (!next || next.join() !== keys.join()) break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+    }
+    if (answered === 0) return false
+    const final = await api('GET', `/v1/sessions/${id}/output?lines=60`)
+    return startupAnswer(final.lines) === null
 }
 
 const MAX_WAIT_SECONDS = 600 // the API caps wait timeoutMs at 600000
@@ -393,7 +428,7 @@ const commands = {
 
         const extra = []
         if (result.createdWorkspace) extra.push('  registered the folder as a new workspace')
-        if (trusted) extra.push('  answered the folder-trust question with "Yes, I trust this folder"')
+        if (trusted) extra.push('  answered the start-up questions (folder trust, skipped the Codex update offer)')
         if (result.terminalStarted === false) extra.push('  ! terminal not started — is the app window open?')
         if (flags.prompt) extra.push(`  first prompt ${result.promptSent ? 'sent' : 'NOT sent'}`)
         if (result.note) extra.push(`  ! ${result.note}`)
