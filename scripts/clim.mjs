@@ -149,7 +149,11 @@ async function api(method, path, body, { timeoutMs = 30_000 } = {}) {
             headers: {
                 Authorization: `Bearer ${token}`,
                 'Content-Type': 'application/json',
-                'X-Client-Name': process.env.CLIM_CLIENT || 'clim'
+                'X-Client-Name': process.env.CLIM_CLIENT || 'clim',
+                // Inside a CLI Manager terminal the app sets your session id. Sending it lets the app
+                // mark this session as the "master" (rose tint) once it opens other sessions.
+                // Display-only, self-reported; older app versions ignore the header.
+                ...(process.env.CLIMANAGER_SESSION_ID ? { 'X-Caller-Session': process.env.CLIMANAGER_SESSION_ID } : {})
             },
             body: body === undefined ? undefined : JSON.stringify(body),
             signal: AbortSignal.timeout(timeoutMs)
