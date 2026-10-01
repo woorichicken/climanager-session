@@ -255,8 +255,17 @@ async function answerFolderTrust(id) {
     const screen = await api('GET', `/v1/sessions/${id}/output?lines=60`)
     const lines = screen.lines
     const yes = lines.findIndex((line) => TRUST_YES.test(line))
-    const cursor = lines.findIndex((line) => TRUST_CURSOR.test(line))
-    if (yes < 0 || cursor < 0) return false
+    // The highlighted option is the pointer row nearest to "Yes" — an earlier "❯ prompt" line can be above it.
+    let cursor = -1
+    for (let distance = 0; distance <= 3 && cursor < 0; distance++) {
+        for (const row of [yes - distance, yes + distance]) {
+            if (row >= 0 && row < lines.length && TRUST_CURSOR.test(lines[row])) {
+                cursor = row
+                break
+            }
+        }
+    }
+    if (cursor < 0) return false
 
     const distance = yes - cursor
     const keys = [...Array(Math.abs(distance)).fill(distance > 0 ? 'down' : 'up'), 'enter']
