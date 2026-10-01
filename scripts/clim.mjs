@@ -53,7 +53,7 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
   clim doctor                                   API status, address, connectivity
   clim templates                                templates (name → command)
   clim workspaces [query]                       registered folders
-  clim sessions                                 sessions opened by the API
+  clim sessions [query] [--all]                 sessions marked as AI-driven (--all: every session, app 1.11+)
   clim policy [--template name]                 show the rules appended to first prompts (if any)
 
   clim open <folder> [options]                  open a session
@@ -63,6 +63,7 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
       --prompt "<text>"   first prompt, sent once the program is ready
       --no-policy         do not append the session policy file
       --focus             switch the app to this session (costs the user's caret)
+      --no-trust          do not answer Claude Code's "trust this folder?" question with Yes
       --workspace <id>    target a workspace id instead of a folder
 
   clim send <session> "<text>" [options]        type into a session (Enter by default)
@@ -76,8 +77,9 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
   clim watch [--prefix <name>] [--interval <sec>] [--timeout <sec>] [--load-alert <n>]
                                                 wait until ANY session goes busy→idle or asks a question
   clim focus <session>                          switch the app to this session
-  clim release <session>                        hand it to the user (session keeps running)
-  clim close <session>                          kill and remove the session
+  clim rename <session> "<name>"                change the name shown in the sidebar (app 1.11+)
+  clim release <session>                        hand it to the user (keeps running, AI mark cleared)
+  clim close <session>                          kill and remove the session (any session — only close ones you opened unless asked)
 
   common: --json (raw JSON) · <session> = id prefix, part of the name, or 'last'`
 
@@ -171,7 +173,9 @@ async function api(method, path, body, { timeoutMs = 30_000 } = {}) {
             process.stderr.write('Read the screen (clim read) and answer with keys: clim send <session> --keys down,enter\n')
             process.exit(EXIT.AWAITING)
         }
-        if (code === 'not_controlled' || code === 'not_found') {
+        // disconnected: the user clicked Disconnect AI while you were waiting (app 1.11+).
+        // not_controlled: what app 1.10 and earlier returned for that and for "not yours".
+        if (code === 'disconnected' || code === 'not_controlled' || code === 'not_found') {
             fail(EXIT.NO_SESSION, `${code}: ${message}`)
         }
         fail(1, `${code}: ${message}`)
@@ -212,21 +216,59 @@ function printScreen(result) {
 async function resolveSession(token) {
     if (!token) fail(EXIT.USAGE, 'Specify a session. (list them with: clim sessions)')
     const sessions = await api('GET', '/v1/sessions')
-    if (sessions.length === 0) fail(EXIT.NO_SESSION, 'No AI sessions are open. Open one with: clim open')
 
-    if (token === 'last') return sessions[sessions.length - 1].id
+    if (token === 'last') {
+        if (sessions.length === 0) fail(EXIT.NO_SESSION, 'No AI sessions are open. Open one with: clim open')
+        return sessions[sessions.length - 1].id
+    }
 
-    const exact = sessions.find((s) => s.id === token)
-    if (exact) return exact.id
+    // Look among AI-marked sessions first, then every session (the user's too).
+    // App 1.10 and earlier ignore scope and return the same list, so nothing changes there.
+    const match = (list) => {
+        const exact = list.find((s) => s.id === token)
+        if (exact) return exact.id
+        const prefix = list.filter((s) => s.id.startsWith(token))
+        if (prefix.length === 1) return prefix[0].id
+        if (prefix.length > 1) fail(EXIT.USAGE, `Prefix "${token}" matches ${prefix.length} sessions. Use more characters.`)
+        const byName = list.filter((s) => s.name.includes(token))
+        if (byName.length === 1) return byName[0].id
+        if (byName.length > 1) fail(EXIT.USAGE, `"${token}" is in the name of ${byName.length} sessions. Use the id.`)
+        return null
+    }
+    const found = match(sessions) ?? match(await api('GET', '/v1/sessions?scope=all'))
+    if (found) return found
 
-    const prefix = sessions.filter((s) => s.id.startsWith(token))
-    if (prefix.length === 1) return prefix[0].id
-    if (prefix.length > 1) fail(EXIT.USAGE, `Prefix "${token}" matches ${prefix.length} sessions. Use more characters.`)
+    fail(EXIT.NO_SESSION, `Session not found: ${token}`, 'List sessions with: clim sessions --all')
+}
 
-    const byName = sessions.filter((s) => s.name.includes(token))
-    if (byName.length === 1) return byName[0].id
+/** The one question clim answers on its own. Permission prompts and other warnings are left to you. */
+const TRUST_YES = /Yes, I trust this folder/
+const TRUST_CURSOR = /^\s*[❯›>]\s/
+const TRUST_SETTLE_MS = 15_000
 
-    fail(EXIT.NO_SESSION, `Session not found: ${token}`, 'List sessions with: clim sessions')
+/**
+ * If the screen is Claude Code's folder-trust question, move the cursor to "Yes" and press Enter.
+ * The options have no numbers, so it presses arrows for the distance between the cursor and "Yes".
+ * True only once the question is gone.
+ */
+async function answerFolderTrust(id) {
+    const screen = await api('GET', `/v1/sessions/${id}/output?lines=60`)
+    const lines = screen.lines
+    const yes = lines.findIndex((line) => TRUST_YES.test(line))
+    const cursor = lines.findIndex((line) => TRUST_CURSOR.test(line))
+    if (yes < 0 || cursor < 0) return false
+
+    const distance = yes - cursor
+    const keys = [...Array(Math.abs(distance)).fill(distance > 0 ? 'down' : 'up'), 'enter']
+    await api('POST', `/v1/sessions/${id}/input`, { keys })
+
+    const deadline = Date.now() + TRUST_SETTLE_MS
+    while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        const after = await api('GET', `/v1/sessions/${id}/output?lines=60`)
+        if (!after.lines.some((line) => TRUST_YES.test(line))) return true
+    }
+    return false
 }
 
 const MAX_WAIT_SECONDS = 600 // the API caps wait timeoutMs at 600000
@@ -284,13 +326,21 @@ const commands = {
         if (workspaces.length > SHOWN) process.stdout.write(`… and ${workspaces.length - SHOWN} more. Pass a query.\n`)
     },
 
-    async sessions(_positional, flags) {
-        const sessions = await api('GET', '/v1/sessions')
+    async sessions(positional, flags) {
+        const params = new URLSearchParams()
+        if (flags.all) params.set('scope', 'all')
+        if (positional[0]) params.set('query', positional[0])
+        const query = params.toString()
+        const sessions = await api('GET', `/v1/sessions${query ? `?${query}` : ''}`)
         if (flags.json) return process.stdout.write(json(sessions))
-        if (sessions.length === 0) return process.stdout.write('No AI sessions are open.\n')
+        if (sessions.length === 0) {
+            return process.stdout.write(flags.all ? 'No sessions.\n' : 'No AI sessions are open. (--all includes your own)\n')
+        }
         for (const s of sessions) {
+            // aiControlled exists from app 1.11; without it every listed session is an AI session.
+            const mark = s.aiControlled === false ? 'user ' : 'AI   '
             process.stdout.write(
-                `${s.id.slice(0, 8)}  ${s.state.padEnd(8)}${s.awaitingInput ? 'question ' : '         '}${s.name}  (${s.cwd})\n`
+                `${s.id.slice(0, 8)}  ${mark}${s.state.padEnd(8)}${s.awaitingInput ? 'question ' : '         '}${s.name}  (${s.cwd})\n`
             )
         }
     },
@@ -311,10 +361,29 @@ const commands = {
         }
         // The first prompt is sent after the program starts, so the app holds the response longer.
         const result = await api('POST', '/v1/sessions', body, { timeoutMs: flags.prompt ? 120_000 : 40_000 })
-        if (flags.json) return process.stdout.write(json(result))
+
+        // In a folder it has not seen, Claude Code first asks whether to trust it — with the cursor on
+        // "No, exit", so a single Enter quits the agent. You opened the session to work in this folder,
+        // so clim picks "Yes, I trust this folder" and then sends the first prompt the app held back.
+        let trusted = false
+        if (result.session.awaitingInput && !flags['no-trust']) {
+            trusted = await answerFolderTrust(result.session.id)
+            if (trusted) {
+                result.session = await api('GET', `/v1/sessions/${result.session.id}`)
+                if (body.prompt && !result.promptSent && !result.session.awaitingInput) {
+                    await api('POST', `/v1/sessions/${result.session.id}/wait`, { timeoutMs: 60_000, quietMs: 2_000 }, { timeoutMs: 70_000 })
+                    await api('POST', `/v1/sessions/${result.session.id}/input`, { text: body.prompt })
+                    result.promptSent = true
+                    delete result.note
+                    result.session = await api('GET', `/v1/sessions/${result.session.id}`)
+                }
+            }
+        }
+        if (flags.json) return process.stdout.write(json({ ...result, trustedFolder: trusted }))
 
         const extra = []
         if (result.createdWorkspace) extra.push('  registered the folder as a new workspace')
+        if (trusted) extra.push('  answered the folder-trust question with "Yes, I trust this folder"')
         if (result.terminalStarted === false) extra.push('  ! terminal not started — is the app window open?')
         if (flags.prompt) extra.push(`  first prompt ${result.promptSent ? 'sent' : 'NOT sent'}`)
         if (result.note) extra.push(`  ! ${result.note}`)
@@ -430,10 +499,19 @@ const commands = {
         process.stdout.write(`switched the app to: ${id.slice(0, 8)}\n`)
     },
 
+    async rename(positional, flags) {
+        const id = await resolveSession(positional[0])
+        const name = positional.slice(1).join(' ').trim()
+        if (!name) fail(EXIT.USAGE, 'A new name is required: clim rename <session> "<name>"')
+        const session = await api('POST', `/v1/sessions/${id}/rename`, { name })
+        if (flags.json) return process.stdout.write(json(session))
+        process.stdout.write(`renamed ${id.slice(0, 8)} → ${session.name}\n`)
+    },
+
     async release(positional) {
         const id = await resolveSession(positional[0])
         await api('POST', `/v1/sessions/${id}/release`)
-        process.stdout.write(`handed to the user (session keeps running): ${id.slice(0, 8)}\n`)
+        process.stdout.write(`handed to the user (keeps running, AI mark cleared): ${id.slice(0, 8)}\n`)
     },
 
     async close(positional) {

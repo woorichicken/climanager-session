@@ -9,8 +9,8 @@ description: >-
   "run this in a CLI Manager session", "spin up a terminal and have an agent do X", "delegate
   this to another agent session", "run Claude in that folder and show me", "clim", or "AI
   Control API", and when they ask about a session already opened this way ("is it done?",
-  "what is it doing now?"). The user's own terminals are out of scope — the API only touches
-  sessions it opened.
+  "what is it doing now?"). From CLI Manager 1.11 it can also read, type into, rename and close
+  sessions the user opened — only when the user's request points at that session.
 ---
 
 # CLI Manager sessions (`clim`)
@@ -58,7 +58,7 @@ per user — pick one from `templates`, or pass `--command "claude"` instead.
 | --- | --- | --- |
 | 0 | ok | next step |
 | 3 | **a question or menu is on screen** | read the screen, answer with `--keys` |
-| 4 | no such session / not yours (user took it back) | stop using it; open a new one if needed |
+| 4 | no such session / the user clicked Disconnect AI while you waited | stop using it; it reconnects if the user asks you to continue |
 | 5 | API off, app not running | ask the user to turn it on (see Troubleshooting) |
 | 7 | wait timed out — **still running** | not a failure; wait again or report progress |
 | 2 | usage error | fix the arguments |
@@ -74,8 +74,17 @@ per user — pick one from `templates`, or pass `--command "claude"` instead.
    ```
 2. **Folder trust and permission prompts are the user's call.** Accept trust only when the user asked
    for work in that folder. When unsure, report the screen and ask.
+   - `clim open` answers **Claude Code's folder-trust question with Yes** by itself and then sends the
+     first prompt — you open a session to work in that folder. That question starts with the cursor on
+     **"No, exit"**, so a bare Enter quits the agent. It is the only question clim answers on its own;
+     anything else (permission prompts, warnings) still stops with exit 3. `--no-trust` turns it off.
 3. **Do not use `--force`** except to answer a free-text question ("What should I do differently?").
-4. **Exit 4 means stop.** The user clicked *Disconnect AI*. Do not reattach.
+4. **Exit 4 means stop.** The user clicked *Disconnect AI*. From app 1.11 another call would technically
+   reconnect, so this rule is what keeps you out — continue only when the user asks.
+4a. **Sessions the user opened: only when the request points at them.** `clim sessions --all` finds them,
+   and read / send / rename / close all work (app 1.11+). The first read or send turns the session green
+   in the sidebar. If the user is typing there, your text mixes with theirs — read the screen first.
+   Only `close` a session you did not open when the user asked for it.
 5. **Use `--focus` only when the user asked to watch.** Switching the displayed session takes the
    caret away from whatever the user was typing in. The green sidebar entry is enough by default.
 6. **Tell the user before `close`.** It kills the process. Use `release` to leave the result behind.
@@ -120,7 +129,7 @@ Codex templates and `/` otherwise, so skill references work in both. Start from
    │ 1. url + token from ~/.climanager/control-api.json
    │ 2. HTTP → http://127.0.0.1:47821/v1/…   Authorization: Bearer <token>
    ├──────────────▶ ControlApiServer  (loopback only · token, Host, Origin checked)
-   │                ControlApiService (only sessions the API opened)
+   │                ControlApiService (every session while the API is on, 1.11+)
    │                TerminalManager → node-pty → shell → agent  ──▶ green session in the sidebar
    │                   pty output ─┬─▶ app terminal (what the user sees)
    │                               └─▶ headless mirror
@@ -139,7 +148,7 @@ Codex templates and `/` otherwise, so skill references work in both. Start from
 | `doctor` exits 5 | app not running or API toggle off | Settings > Agents > **AI Control API** |
 | No "AI Control API" in Settings | app older than v1.9.0 | update CLI Manager |
 | `terminal not started` | the app window is closed (app in background) | ask the user to open the window |
-| `first prompt NOT sent` + note | the program is asking something (often folder trust) | `read`, answer with `--keys`, then `send` the prompt |
+| `first prompt NOT sent` + note | the program is asking something other than folder trust | `read`, answer with `--keys`, then `send` the prompt |
 | Prompt typed but never submitted | Enter was eaten under heavy load | `send <session> --keys enter` |
 | A long `wait` ends with exit 5 | the long request was dropped; the app is fine | `doctor`, then `wait` in chunks of ≤240s |
 | Port conflict | something else holds 47821 | change the port in Settings (user's decision) |

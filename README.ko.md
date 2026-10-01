@@ -20,6 +20,7 @@ npx skills add woorichicken/climanager-session@climanager-session
 
 1. **CLI Manager v1.10.0 이상**(macOS) 설치 — [최신 릴리스](https://github.com/woorichicken/CLI_manager/releases/latest).
    API 는 v1.9.0 부터 있고, v1.10.0 에서 부하 중 입력 유실과 입력창 추천 문구 구분이 고쳐졌습니다.
+   v1.11.0 부터는 API 가 켜져 있으면 직접 연 세션도 읽고·입력하고·이름을 바꾸고·닫을 수 있습니다(`clim sessions --all`).
 2. 앱에서 **Settings › Agents › AI Control API** 켜기. `~/.climanager/control-api.json`(주소·토큰, 권한 600,
    앱 종료 시 삭제)이 생기고 `127.0.0.1:47821` 에서 대기합니다.
 3. 스킬 설치: 위 명령(모든 프로젝트에 쓰려면 `-g`).
@@ -72,7 +73,7 @@ claude mcp add --scope user --transport http cli-manager http://127.0.0.1:47821/
 | `doctor` 가 5 | 앱 실행 + AI Control API 켜기 |
 | Settings 에 항목이 없음 | CLI Manager 업데이트 |
 | `terminal not started` | 앱 창 열기 |
-| `first prompt NOT sent` | 폴더 신뢰 등 질문 중 — `read` → `--keys` → `send` |
+| `first prompt NOT sent` | 폴더 신뢰 외의 질문 중 — `read` → `--keys` → `send` (Claude Code 폴더 신뢰는 `--no-trust` 가 아니면 자동으로 Yes) |
 | 프롬프트가 입력창에 남아 있음 | `send <세션> --keys enter` |
 
 자세한 내용은 [English README](README.md) 와 [SKILL.md](SKILL.md) 를 보세요. 라이선스: [MIT](LICENSE).

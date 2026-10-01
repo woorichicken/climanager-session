@@ -23,8 +23,9 @@ npx skills add woorichicken/climanager-session@climanager-session
 
 | Does | Doesn't |
 | --- | --- |
-| Opens sessions in CLI Manager with any template or command | Touch terminals you opened yourself |
-| Types prompts, waits until idle, reads the rendered screen | Keep driving a session after you click **Disconnect AI** |
+| Opens sessions in CLI Manager with any template or command | Touch your own terminals unless you point it at them |
+| Types prompts, waits until idle, reads the rendered screen | Keep waiting on a session after you click **Disconnect AI** |
+| Works in sessions you opened, renames and closes sessions (CLI Manager 1.11+) | Answer any question except Claude Code's folder trust on its own |
 | Answers menus with keys, never with a blind Enter | Send anything off your machine (loopback only) |
 | Waits on many sessions at once (`clim watch`) | Need MCP, npm packages, or an account |
 
@@ -120,7 +121,7 @@ If you run several agents at once, you can make every first prompt carry the sam
 | `doctor` exits 5 | Start CLI Manager and turn on Settings › Agents › AI Control API |
 | No "AI Control API" in Settings | Update CLI Manager (v1.9.0+, v1.10.0+ recommended) |
 | `terminal not started` | Open the app window — sessions start in the window, not in the background |
-| `first prompt NOT sent` | The program is asking something (often folder trust): `read`, answer with `--keys`, then `send` |
+| `first prompt NOT sent` | The program is asking something (folder trust is answered for you unless `--no-trust`): `read`, answer with `--keys`, then `send` |
 | Prompt sits in the input box unsent | `send <session> --keys enter` |
 | A long `wait` ends with exit 5 | Run `doctor`, then wait in chunks of ≤240 s |
 | Port 47821 is taken | Change the port in Settings |
@@ -129,7 +130,8 @@ If you run several agents at once, you can make every first prompt carry the sam
 ## Security
 
 The API binds to `127.0.0.1` only, requires the bearer token, and rejects foreign `Host`/`Origin`
-headers, so web pages can't call it. It can only read or type into sessions it opened. Report
+headers, so web pages can't call it. From CLI Manager 1.11, while the API is on it can read and type into
+every session in the app — sessions it works in turn green, and switching the API off ends access. Report
 vulnerabilities privately via [GitHub security advisories](https://github.com/woorichicken/climanager-session/security/advisories/new).
 
 API contract: [control-api.md](https://github.com/woorichicken/CLI_manager/blob/main/docs/architecture/control-api.md).
