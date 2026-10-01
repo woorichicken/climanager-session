@@ -77,7 +77,7 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
   clim watch [--prefix <name>] [--interval <sec>] [--timeout <sec>] [--load-alert <n>]
                                                 wait until ANY session goes busy→idle or asks a question
   clim focus <session>                          switch the app to this session
-  clim rename <session> "<name>"                change the name shown in the sidebar (app 1.11+)
+  clim rename <session> "<name>" [--claude]     change the sidebar name (app 1.11+); --claude also runs /rename in Claude Code
   clim release <session>                        hand it to the user (keeps running, AI mark cleared)
   clim close <session>                          kill and remove the session (any session — only close ones you opened unless asked)
 
@@ -216,6 +216,24 @@ function printScreen(result) {
 }
 
 // ---------------------------------------------------------------- session lookup
+
+// Also set the Claude Code conversation title (`/rename`) — the sidebar name lives in the app, this title
+// shows in `claude --resume` and on the input box border. Keeping both in sync makes old sessions findable.
+// Skip when the session is not Claude Code, is busy, or shows a question (typed text would get mixed in).
+const CLAUDE_COMMAND = /\bclaude\b/
+// The banner may scroll away; the status line under the input box (⏵⏵ mode, '? for shortcuts') stays.
+const CLAUDE_SCREEN = /Claude Code|⏵⏵|\? for shortcuts|bypass permissions|accept edits|plan mode on/
+async function renameClaudeConversation(id, name) {
+    const s = await api('GET', `/v1/sessions/${id}`)
+    const out = await api('GET', `/v1/sessions/${id}/output`)
+    const screen = (out.lines ?? []).join('\n')
+    const isClaude = CLAUDE_COMMAND.test(s.command ?? '') || CLAUDE_SCREEN.test(screen)
+    if (!isClaude) fail(EXIT.USAGE, `Not a Claude Code session, /rename was not sent (command: ${s.command || 'unknown'}).`)
+    if (s.awaitingInput) fail(EXIT.AWAITING, 'A question is on screen, /rename was not sent.', 'Read it with clim read, answer, then run again.')
+    if (s.state === 'busy') fail(EXIT.TIMEOUT, 'The session is busy, /rename was not sent (sidebar name only).', 'Run again when it is idle.')
+    await api('POST', `/v1/sessions/${id}/input`, { text: `/rename ${name}` })
+    process.stdout.write(`Claude conversation title set: /rename ${name}\n`)
+}
 
 async function resolveSession(token) {
     if (!token) fail(EXIT.USAGE, 'Specify a session. (list them with: clim sessions)')
@@ -553,8 +571,9 @@ const commands = {
         const name = positional.slice(1).join(' ').trim()
         if (!name) fail(EXIT.USAGE, 'A new name is required: clim rename <session> "<name>"')
         const session = await api('POST', `/v1/sessions/${id}/rename`, { name })
-        if (flags.json) return process.stdout.write(json(session))
+        if (flags.json && !flags.claude) return process.stdout.write(json(session))
         process.stdout.write(`renamed ${id.slice(0, 8)} → ${session.name}\n`)
+        if (flags.claude) await renameClaudeConversation(id, name)
     },
 
     async release(positional) {
