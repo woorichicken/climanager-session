@@ -53,6 +53,7 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
   clim doctor                                   API status, address, connectivity
   clim templates                                templates (name → command)
   clim workspaces [query]                       registered folders
+  clim unregister <workspace>                   unregister a workspace the AI registered (app 1.12+; files stay)
   clim sessions [query] [--all]                 sessions marked as AI-driven (--all: every session, app 1.11+)
   clim policy [--template name]                 show the rules appended to first prompts (if any)
 
@@ -65,6 +66,8 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
       --focus             switch the app to this session (costs the user's caret)
       --no-trust          do not answer Claude Code's "trust this folder?" question with Yes
       --workspace <id>    target a workspace id instead of a folder
+      --folder <name|id>  sidebar folder for a newly registered workspace (app 1.12+; created if missing)
+      --ephemeral         temporary registration, removed with its last session (automatic for /tmp and scratch paths)
 
   clim send <session> "<text>" [options]        type into a session (Enter by default)
       --keys enter,down   special keys (always answer questions/menus with these)
@@ -235,6 +238,11 @@ async function renameClaudeConversation(id, name) {
     process.stdout.write(`Claude conversation title set: /rename ${name}\n`)
 }
 
+const SCRATCH_PATH = /^(\/tmp\/|\/private\/tmp\/|\/var\/folders\/)|\/scratchpad(\/|$)/
+function isScratchPath(folder) {
+    return SCRATCH_PATH.test(folder)
+}
+
 async function resolveSession(token) {
     if (!token) fail(EXIT.USAGE, 'Specify a session. (list them with: clim sessions)')
     const sessions = await api('GET', '/v1/sessions')
@@ -381,6 +389,19 @@ const commands = {
         for (const t of templates) process.stdout.write(`${t.name.padEnd(18)} ${t.command}\n`)
     },
 
+    // Unregister a workspace the AI registered (app 1.12+). Only the sidebar entry goes; files stay.
+    // The app refuses the user's own workspaces (403) and ones with open sessions (409).
+    async unregister(positional, flags) {
+        const token = positional[0]
+        if (!token) fail(EXIT.USAGE, 'A workspace id or name is required: clim unregister <workspace>')
+        const list = await api('GET', '/v1/workspaces')
+        const items = Array.isArray(list) ? list : list.workspaces ?? []
+        const hits = items.filter((w) => w.id.startsWith(token) || w.name === token || w.path === token)
+        if (hits.length !== 1) fail(EXIT.USAGE, hits.length ? `Several match: ${hits.map((w) => w.id.slice(0, 8) + ' ' + w.name).join(', ')}` : `No workspace matches: ${token}`)
+        await api('DELETE', `/v1/workspaces/${hits[0].id}`)
+        process.stdout.write(`unregistered ${hits[0].name} (${hits[0].path}) — the folder itself is untouched\n`)
+    },
+
     async workspaces(positional, flags) {
         const query = positional[0] ? `?query=${encodeURIComponent(positional[0])}` : ''
         const workspaces = await api('GET', `/v1/workspaces${query}`)
@@ -424,7 +445,12 @@ const commands = {
             ...(flags.command ? { command: flags.command } : {}),
             ...(flags.name ? { name: flags.name } : {}),
             ...(flags.prompt ? { prompt: withPolicy(flags.prompt, flags) } : {}),
-            ...(flags.focus ? { focus: true } : {})
+            ...(flags.focus ? { focus: true } : {}),
+            // Sidebar folder (app 1.12+). A missing name is created; omitted = the app setting ('AI Work').
+            ...(flags.folder !== undefined ? { folder: flags.folder === true ? '' : String(flags.folder) } : {}),
+            // Temporary registration (app 1.12+): unregistered when its last session closes.
+            // Turned on automatically for /tmp and scratch folders so they don't pile up in the sidebar.
+            ...(flags.ephemeral || (folder && isScratchPath(folder)) ? { ephemeral: true } : {})
         }
         // The first prompt is sent after the program starts, so the app holds the response longer.
         const result = await api('POST', '/v1/sessions', body, { timeoutMs: flags.prompt ? 120_000 : 40_000 })
