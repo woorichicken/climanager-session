@@ -65,6 +65,7 @@ const USAGE = `clim — drive CLI Manager sessions (AI Control API / REST)
       --no-policy         do not append the session policy file
       --focus             switch the app to this session (costs the user's caret)
       --no-trust          do not answer Claude Code's "trust this folder?" question with Yes
+      --no-submit-check   do not re-check that the first prompt was submitted (Enter re-sent when stuck)
       --workspace <id>    target a workspace id instead of a folder
       --folder <name|id>  sidebar folder for a newly registered workspace (app 1.12+; created if missing)
       --ephemeral         temporary registration, removed with its last session (automatic for /tmp and scratch paths)
@@ -317,6 +318,42 @@ function startupAnswer(lines) {
     return null
 }
 
+// Sometimes the first prompt lands in the input box but is never submitted (the Enter is lost), and the
+// session sits idle while the caller believes it is working. So open looks at the screen once more after
+// sending and, if the prompt is still in the input box, sends Enter again.
+const PROMPT_SETTLE_MS = Number(process.env.CLIM_PROMPT_SETTLE_MS ?? 4_000)
+const PROMPT_SUBMIT_CHECKS = 3
+const INPUT_RULE = /^\s*─{10,}/
+const PROMPT_HEAD_CHARS = 6
+
+/**
+ * True when the prompt still sits in the input box: Claude Code draws the box between the last two
+ * horizontal rules, and a submitted prompt is echoed above them instead.
+ */
+function promptStuckInInput(lines, prompt) {
+    const rules = lines.map((line, i) => (INPUT_RULE.test(line) ? i : -1)).filter((i) => i >= 0)
+    if (rules.length < 2) return false
+    const box = lines.slice(rules[rules.length - 2] + 1, rules[rules.length - 1])
+    const head = prompt.trim().slice(0, PROMPT_HEAD_CHARS)
+    return box.some((line) => /^\s*[❯›>]\s*\S/.test(line) && line.includes(head))
+}
+
+/** 'started' · 'retried' (sent Enter again, then it started) · 'unconfirmed' (could not tell — read the screen) */
+async function ensurePromptSubmitted(id, prompt) {
+    let retried = false
+    for (let check = 0; check < PROMPT_SUBMIT_CHECKS; check++) {
+        await new Promise((resolve) => setTimeout(resolve, PROMPT_SETTLE_MS))
+        const session = await api('GET', `/v1/sessions/${id}`)
+        if (session.state === 'busy') return retried ? 'retried' : 'started'
+        const screen = await api('GET', `/v1/sessions/${id}/output?lines=60`)
+        if (!retried && promptStuckInInput(screen.lines ?? [], prompt)) {
+            await api('POST', `/v1/sessions/${id}/input`, { keys: ['enter'] })
+            retried = true
+        }
+    }
+    return 'unconfirmed'
+}
+
 /**
  * Answers the questions an agent asks before its first prompt in a new folder: Claude Code's
  * folder trust (cursor on "No, exit"), Codex's update offer (cursor on "Update now") and Codex's
@@ -472,13 +509,19 @@ const commands = {
                 }
             }
         }
-        if (flags.json) return process.stdout.write(json({ ...result, trustedFolder: trusted }))
+        let promptCheck = null
+        if (body.prompt && result.promptSent && !result.session.awaitingInput && !flags['no-submit-check']) {
+            promptCheck = await ensurePromptSubmitted(result.session.id, body.prompt)
+            result.session = await api('GET', `/v1/sessions/${result.session.id}`)
+        }
+        if (flags.json) return process.stdout.write(json({ ...result, trustedFolder: trusted, ...(promptCheck ? { promptCheck } : {}) }))
 
         const extra = []
         if (result.createdWorkspace) extra.push('  registered the folder as a new workspace')
         if (trusted) extra.push('  answered the start-up questions (folder trust, skipped the Codex update offer)')
         if (result.terminalStarted === false) extra.push('  ! terminal not started — is the app window open?')
-        if (flags.prompt) extra.push(`  first prompt ${result.promptSent ? 'sent' : 'NOT sent'}`)
+        const checkLabel = { started: '· started', retried: '· was stuck in the input box, sent Enter again → started', unconfirmed: '· could not confirm it started — check with clim read' }
+        if (flags.prompt) extra.push(`  first prompt ${result.promptSent ? 'sent' : 'NOT sent'} ${promptCheck ? checkLabel[promptCheck] : ''}`.trimEnd())
         if (result.note) extra.push(`  ! ${result.note}`)
         printSession(result.session, extra)
         if (result.session.awaitingInput) {

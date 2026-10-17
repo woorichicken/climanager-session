@@ -100,8 +100,11 @@ per user — pick one from `templates`, or pass `--command "claude"` instead.
 - **Dim text in an empty input box is not user input.** Claude Code shows a next-prompt suggestion
   there. The API reports it separately as `suggestion` (and `clim read` prints it on its own line);
   don't treat it as an instruction. A prompt was really submitted only if it appears above with `❯`.
-- **Right after `open --prompt`, read once** and check for `esc to interrupt` / `Working`. If the
-  prompt is sitting in the input box unsent, press `send <session> --keys enter`.
+- **`open --prompt` checks that the prompt was actually submitted.** Sometimes it lands in the input
+  box and the Enter is lost, so the session sits idle while you think it is working. `open` looks at the
+  screen again and, if the prompt is still in the input box, sends Enter once more. The result is in
+  `--json` as `promptCheck` (`started` · `retried` · `unconfirmed`); on `unconfirmed`, read the screen
+  and press `send <session> --keys enter` yourself.
 - **"shell still running"** on an idle screen means the agent is waiting on its own background job
   and will wake itself — it is not finished.
 - Claude Code's "How is Claude doing this session?" survey closes with `--keys 0`.
