@@ -19,6 +19,7 @@ npx skills add woorichicken/climanager-session@climanager-session
 - "Spin up three sessions, one per package, and tell me when each one finishes."
 - "Is the session you opened done? What is it doing now?"
 - "Give me a link to those two sessions." — prints `climanager://session/…`; click it to open them side by side (CLI Manager 1.14.2+).
+- "Hand me the design doc so I can review it in Obsidian." — prints `obsidian:///…`; click it to open the note (add `obsidian` under Settings > Terminal > App Links in Terminal, CLI Manager 1.17.0+).
 
 ## What it does — and doesn't
 

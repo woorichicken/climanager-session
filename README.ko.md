@@ -16,6 +16,7 @@ npx skills add woorichicken/climanager-session@climanager-session
 - "패키지마다 세션 하나씩 세 개 열고, 끝나는 대로 알려줘"
 - "아까 연 세션 끝났어? 지금 뭐 하고 있어?"
 - "그 두 세션 링크 줘" — `climanager://session/…` 를 찍어 주고, 누르면 나란히 열립니다 (CLI Manager 1.14.2+).
+- "설계 문서 옵시디언에서 리뷰하게 넘겨줘" — `obsidian:///…` 를 찍어 주고, 누르면 옵시디언에서 열립니다 (Settings > Terminal > App Links in Terminal 에 `obsidian` 추가, CLI Manager 1.17.0+).
 
 ## 설치부터 첫 세션까지
 

@@ -11,7 +11,8 @@ description: >-
   Control API", and when they ask about a session already opened this way ("is it done?",
   "what is it doing now?"). From CLI Manager 1.11 it can also read, type into, rename and close
   sessions the user opened — only when the user's request points at that session. Also use it to
-  hand something to the user as one clickable terminal line ("give me a link to that session").
+  hand something to the user as one clickable terminal line ("give me a link to that session",
+  "hand me the doc so I can review it in Obsidian").
 ---
 
 # CLI Manager sessions (`clim`)
@@ -35,6 +36,11 @@ node "$CLI" templates     # what can be launched (names come from the user's Set
 ```
 
 If `doctor` exits 5, ask the user to start the app and turn the API on. Do not work around it.
+
+4. **Optional — documents to review in another app.** For the agent to hand over a document that
+   opens in an app such as Obsidian, add that app's scheme (`obsidian`) under **Settings > Terminal >
+   App Links in Terminal** (CLI Manager 1.17.0+). Terminal output is untrusted, so only web, file and
+   editor links open by default. The agent cannot see this setting — it is the user's one-time step.
 
 ## Basic flow
 
@@ -128,11 +134,19 @@ instead of describing where it is.
 | --- | --- | --- |
 | A session | `climanager://session/<first 8 chars of the id>` — several joined by `,` (up to 4) open side by side | CLI Manager 1.14.2+ |
 | A code file | `src/app.ts:42` | file links on (the default) — ⌘-click opens the editor |
+| A document to review in Obsidian | `obsidian:///<absolute path>` — non-ASCII as is, spaces as `%20` | `obsidian` added in App Links (setup step 4) and the file is inside a vault |
 
 - **Keep links short.** Claude Code breaks a word longer than the screen onto an indented next line,
   and only the part before the break stays clickable. That is why session links use 8 characters.
 - A session link only switches the view — clicking it never types anything.
 - The session you are running in is `$CLIMANAGER_SESSION_ID`; `clim sessions` lists the others.
+- `obsidian:///<absolute path>` is Obsidian's documented shorthand for `obsidian://open?path=`.
+  Use it rather than the long form or percent-encoding (one CJK character becomes 9 characters).
+- Print the app link even though you can't tell whether the scheme is on — if it is off, the user
+  still reads an absolute path. For another app, print that app's own documented URL.
+- Outside a vault, hand over the path instead. Don't copy the file into a vault to get a link — the
+  copy drifts from the original. Don't `open` the link yourself unless asked; the app jumps to the
+  front and interrupts the user.
 
 ## Running several sessions
 
