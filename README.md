@@ -18,6 +18,7 @@ npx skills add woorichicken/climanager-session@climanager-session
 - "Open `~/code/api` in CLI Manager with Claude Code and have it fix the failing test."
 - "Spin up three sessions, one per package, and tell me when each one finishes."
 - "Is the session you opened done? What is it doing now?"
+- "Give me a link to those two sessions." — prints `climanager://session/…`; click it to open them side by side (CLI Manager 1.14.2+).
 
 ## What it does — and doesn't
 

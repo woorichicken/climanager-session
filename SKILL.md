@@ -10,7 +10,8 @@ description: >-
   this to another agent session", "run Claude in that folder and show me", "clim", or "AI
   Control API", and when they ask about a session already opened this way ("is it done?",
   "what is it doing now?"). From CLI Manager 1.11 it can also read, type into, rename and close
-  sessions the user opened — only when the user's request points at that session.
+  sessions the user opened — only when the user's request points at that session. Also use it to
+  hand something to the user as one clickable terminal line ("give me a link to that session").
 ---
 
 # CLI Manager sessions (`clim`)
@@ -51,6 +52,15 @@ node "$CLI" close last                   # kill it when nothing is left to see
 
 A session argument can be `last`, an id prefix, or part of the session name. Template names differ
 per user — pick one from `templates`, or pass `--command "claude"` instead.
+
+`last` is the session connected most recently, not the one you opened. When other agents drive
+sessions on the same machine it can be theirs — keep the id from `open --json` instead:
+
+```bash
+ID=$(node "$CLI" open ~/code/my-project --template claude-code --prompt "…" --json \
+     | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).session.id')
+node "$CLI" wait "$ID" --timeout 300
+```
 
 ## Branch on the exit code (never parse the wording)
 
@@ -108,6 +118,21 @@ per user — pick one from `templates`, or pass `--command "claude"` instead.
 - **"shell still running"** on an idle screen means the agent is waiting on its own background job
   and will wake itself — it is not finished.
 - Claude Code's "How is Claude doing this session?" survey closes with `--keys 0`.
+
+## Handing something to the user — one clickable line
+
+When the user should go somewhere next, print a line they can **click** in the CLI Manager terminal
+instead of describing where it is.
+
+| Hand over | Print | Clickable when |
+| --- | --- | --- |
+| A session | `climanager://session/<first 8 chars of the id>` — several joined by `,` (up to 4) open side by side | CLI Manager 1.14.2+ |
+| A code file | `src/app.ts:42` | file links on (the default) — ⌘-click opens the editor |
+
+- **Keep links short.** Claude Code breaks a word longer than the screen onto an indented next line,
+  and only the part before the break stays clickable. That is why session links use 8 characters.
+- A session link only switches the view — clicking it never types anything.
+- The session you are running in is `$CLIMANAGER_SESSION_ID`; `clim sessions` lists the others.
 
 ## Running several sessions
 
@@ -187,4 +212,5 @@ what you confirm once up front, where it must stop, and the one-page summary it 
 
 - The user asked **you** to do it in this conversation — don't open another terminal for it.
 - One-off commands nobody will watch — just run them. The value here is the **visible** terminal.
-- The user's own terminals — outside the API's permission (exit 4).
+- Terminals the user opened that their request doesn't point at — the API reaches them (1.11+),
+  but leave them alone.

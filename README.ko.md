@@ -15,6 +15,7 @@ npx skills add woorichicken/climanager-session@climanager-session
 - "`~/code/api` 를 CLI Manager 에서 Claude Code 로 열고 실패하는 테스트 고치라고 해줘"
 - "패키지마다 세션 하나씩 세 개 열고, 끝나는 대로 알려줘"
 - "아까 연 세션 끝났어? 지금 뭐 하고 있어?"
+- "그 두 세션 링크 줘" — `climanager://session/…` 를 찍어 주고, 누르면 나란히 열립니다 (CLI Manager 1.14.2+).
 
 ## 설치부터 첫 세션까지
 
