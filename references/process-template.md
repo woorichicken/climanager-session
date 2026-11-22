@@ -36,6 +36,9 @@ app reachable (`clim doctor`), sleep prevented, load and disk below your limits,
 ### While running
 
 - Wait with `clim watch` in the background; react only when a session goes idle or asks something.
+- Put the batch's end conditions in one header checklist (`clim checklist new "<batch>" "<item>"…`) and
+  check items off as they finish — you see progress without reading any session.
+- Keep the batch's sessions in one session folder (`clim open … --session-folder "<batch>"`).
 - Give sessions that share a repository an order (B merges after A's deploy is ready).
 - When you decide something for a session, **write the decision down outside the session** (a note on
   the item, a log file). When the session is closed its screen history is gone, and so is the answer
@@ -44,7 +47,8 @@ app reachable (`clim doctor`), sleep prevented, load and disk below your limits,
 ### Where it stops
 
 Name the exact situations that go back to you. Everything else proceeds. If the list is longer than
-four lines, the case is not well defined yet.
+four lines, the case is not well defined yet. When a session reaches one, it also sends one line to the
+app inbox (`clim inbox question|login|review "…"`) so you see it without opening every session.
 
 ### How it ends
 

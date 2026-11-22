@@ -16,13 +16,21 @@ npx skills add woorichicken/climanager-session@climanager-session
 - "패키지마다 세션 하나씩 세 개 열고, 끝나는 대로 알려줘"
 - "아까 연 세션 끝났어? 지금 뭐 하고 있어?"
 - "그 두 세션 링크 줘" — `climanager://session/…` 를 찍어 주고, 누르면 나란히 열립니다 (CLI Manager 1.14.2+).
-- "설계 문서 옵시디언에서 리뷰하게 넘겨줘" — `obsidian:///…` 를 찍어 주고, 누르면 옵시디언에서 열립니다 (Settings > Terminal > App Links in Terminal 에 `obsidian` 추가, CLI Manager 1.17.0+).
+- "설계 문서 옵시디언에서 리뷰하게 넘겨줘" — `obsidian:///…` 를 찍어 주고, 누르면 옵시디언에서 열립니다 (Settings > Terminal > App Links in Terminal 에 `obsidian` 추가, CLI Manager 1.18.0+).
+- "로그인이 필요하면 인박스에 올려줘" — 종 아이콘과 그 세션 줄의 주황 점으로 알립니다 (1.18+).
+- "계획을 헤더 체크리스트로 둬" — 둘 다 보는 칩에 두고, 끝난 항목을 체크합니다 (1.24+).
+- "이 대화 새 세션으로 나눠줘" — 대화를 이어받는 새 세션이 뒤에서 열립니다 (1.31+). 요청할 때만 나눕니다.
+- "평일 아침 9시마다 `~/code/api` 에서 Claude 로 아침 점검 돌려줘" — Autocron 작업으로 만듭니다 (1.34+).
+
+CAPTCHA·보안문자는 풀지 않고 인박스로 사람에게 넘깁니다.
 
 ## 설치부터 첫 세션까지
 
 1. **CLI Manager v1.10.0 이상**(macOS) 설치 — [최신 릴리스](https://github.com/woorichicken/CLI_manager/releases/latest).
    API 는 v1.9.0 부터 있고, v1.10.0 에서 부하 중 입력 유실과 입력창 추천 문구 구분이 고쳐졌습니다.
    v1.11.0 부터는 API 가 켜져 있으면 직접 연 세션도 읽고·입력하고·이름을 바꾸고·닫을 수 있습니다(`clim sessions --all`).
+   새 기능은 더 새 앱이 필요합니다 — 인박스 1.18 · 세션 폴더·Related 1.21 · 헤더 체크리스트 1.24 · fork 1.31 · Autocron 1.34 (최신 릴리스엔 전부 있음).
+   옛 앱에서는 그 명령이 `no_route`(종료 1)와 필요한 버전을 알려 줍니다.
 2. 앱에서 **Settings › Agents › AI Control API** 켜기. `~/.climanager/control-api.json`(주소·토큰, 권한 600,
    앱 종료 시 삭제)이 생기고 `127.0.0.1:47821` 에서 대기합니다.
 3. 스킬 설치: 위 명령(모든 프로젝트에 쓰려면 `-g`).
@@ -57,7 +65,8 @@ npx skills add woorichicken/climanager-session@climanager-session
 | 3 | 화면에 질문·메뉴 | `read` 후 `--keys` 로 답하기 |
 | 4 | 세션 없음 / 사용자가 회수 | 그 세션 사용 중단 |
 | 5 | API 꺼짐·앱 없음 | 2단계 확인 |
-| 7 | 대기 시간 초과 — 아직 실행 중 | 다시 `wait` (실패 아님) |
+| 6 | `send` 한 글의 앞부분이 화면에 안 보임 — 잘려 들어갔을 수 있음 | `read --tail` 후 `send --file` 로 다시 |
+| 7 | 대기 시간 초과 — 아직 실행 중 (또는 일하는 중이라 `close` 거절) | 다시 `wait` (실패 아님) |
 
 ## MCP 로 쓰기
 
@@ -77,5 +86,9 @@ claude mcp add --scope user --transport http cli-manager http://127.0.0.1:47821/
 | `terminal not started` | 앱 창 열기 |
 | `first prompt NOT sent` | 폴더 신뢰 외의 질문 중 — `read` → `--keys` → `send` (Claude Code 폴더 신뢰는 `--no-trust` 가 아니면 자동으로 Yes) |
 | 프롬프트가 입력창에 남아 있음 | `send <세션> --keys enter` |
+| `no_route` (종료 1) | 그 명령보다 옛 앱 — CLI Manager 업데이트 |
+| `send` 가 종료 6 | 긴 지시문이 잘림 — 파일로 쓰고 `send --file <경로>` |
+| Codex 세션 안에서 `inbox` 가 세션을 못 찾음 | Codex 셸에 `CLIMANAGER_SESSION_ID` 가 안 넘어옴 — `--session <id>` |
+| 업데이트 뒤 모든 세션이 다시 뜸 | 앱 업데이트 설치는 모든 터미널을 끕니다. 대화는 이어지지만 돌던 턴·dev 서버·빌드는 끊겨 있으니 세션마다 확인 |
 
 자세한 내용은 [English README](README.md) 와 [SKILL.md](SKILL.md) 를 보세요. 라이선스: [MIT](LICENSE).
